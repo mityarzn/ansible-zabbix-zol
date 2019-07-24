@@ -1,0 +1,35 @@
+---
+# tasks file for zabbix-zol
+- name: "Check if ZoL installed"
+  stat:
+    path: /sbin/zfs
+  register: st
+  when: ansible_facts['system'] == "Linux" and ansible_facts['virtualization_role'] != "guest"
+
+- name: "Do work for ZFS on Linux template"
+  block:
+  - name: "Copy sudoers file"
+    copy:
+      src: sudo-zfs
+      dest: /etc/sudoers.d/zfs
+  - name: "Copy agent config"
+    copy:
+      src: userparameter-zol.conf
+      dest: /etc/zabbix/zabbix_agentd.d/userparameter-zol.conf
+    notify: "Restart zabbix-agent"
+  - name: "Create a new host or update an existing host's info"
+    zabbix_host:
+      server_url: "{{ zabbix_url }}"
+      login_user: "{{ zabbix_api_user }}"
+      login_password: "{{ zabbix_api_pass }}"
+      host_name: "{{ inventory_hostname }}"
+      force: no
+      link_templates: "ZFS on Linux"
+    when:
+      - zabbix_api_create_hosts | bool
+    delegate_to: localhost
+    become: no
+    changed_when: false
+    tags:
+      - api
+  when: ansible_facts['system'] == "Linux" and ansible_facts['virtualization_role'] != "guest" and st.stat.exists
